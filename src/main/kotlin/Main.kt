@@ -84,6 +84,13 @@ suspend fun main() {
                                         label = "Pause"
                                         emoji = dev.kord.common.entity.DiscordPartialEmoji(name = "⏸️")
                                     }
+                                    interactionButton(
+                                        style = dev.kord.common.entity.ButtonStyle.Danger,
+                                        customId = "delete-task-$taskId"
+                                    ) {
+                                        label = "Delete"
+                                        emoji = dev.kord.common.entity.DiscordPartialEmoji(name = "🗑️")
+                                    }
                                 }
                             }
 
@@ -190,6 +197,13 @@ suspend fun main() {
                                         label = "Complete"
                                         emoji = dev.kord.common.entity.DiscordPartialEmoji(name = "✅")
                                     }
+                                    interactionButton(
+                                        style = dev.kord.common.entity.ButtonStyle.Danger,
+                                        customId = "delete-task-$taskId"
+                                    ) {
+                                        label = "Delete"
+                                        emoji = dev.kord.common.entity.DiscordPartialEmoji(name = "🗑️")
+                                    }
                                 }
                             }
 
@@ -243,6 +257,13 @@ suspend fun main() {
                                         label = "Complete"
                                         emoji = dev.kord.common.entity.DiscordPartialEmoji(name = "✅")
                                     }
+                                    interactionButton(
+                                        style = dev.kord.common.entity.ButtonStyle.Danger,
+                                        customId = "delete-task-$taskId"
+                                    ) {
+                                        label = "Delete"
+                                        emoji = dev.kord.common.entity.DiscordPartialEmoji(name = "🗑️")
+                                    }
                                 }
                             }
 
@@ -253,9 +274,25 @@ suspend fun main() {
                 componentId.startsWith("delete-task-") -> {
                     val taskId = componentId.removePrefix("delete-task-")
                     interaction.deferPublicMessageUpdate()
-                    TaskManager.removeTask(taskId)
 
+                    val task = TaskManager.getTasks().find { it.id == taskId }
+                    val taskState = task?.state ?: TaskState.PENDING
+
+                    TaskManager.removeTask(taskId)
                     interaction.message.delete()
+
+                    val config = de.frinshy.config.BotConfig.getInstance()
+                    when (taskState) {
+                        TaskState.PENDING -> config.pendingTasksChannelId?.let { channelId ->
+                            updateChannelSummary(bot, channelId, TaskState.PENDING)
+                        }
+                        TaskState.IN_PROGRESS -> config.inProgressTasksChannelId?.let { channelId ->
+                            updateChannelSummary(bot, channelId, TaskState.IN_PROGRESS)
+                        }
+                        TaskState.COMPLETED -> config.completedTasksChannelId?.let { channelId ->
+                            updateChannelSummary(bot, channelId, TaskState.COMPLETED)
+                        }
+                    }
                 }
 
                 componentId == "resolve-task" || componentId == "complete-task" -> {

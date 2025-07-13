@@ -111,6 +111,13 @@ class PostTaskCommand : Command {
                         label = "Complete"
                         emoji = dev.kord.common.entity.DiscordPartialEmoji(name = "✅")
                     }
+                    interactionButton(
+                        style = ButtonStyle.Danger,
+                        customId = "delete-task-$taskId"
+                    ) {
+                        label = "Delete"
+                        emoji = dev.kord.common.entity.DiscordPartialEmoji(name = "🗑️")
+                    }
                 }
             }
 
