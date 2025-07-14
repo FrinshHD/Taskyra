@@ -9,6 +9,7 @@ import dev.kord.core.behavior.edit
 import dev.kord.rest.builder.message.embed
 import dev.kord.rest.builder.message.EmbedBuilder
 import dev.kord.common.entity.ButtonStyle
+import dev.kord.core.Kord
 import dev.kord.rest.builder.message.actionRow
 
 @Serializable
@@ -118,7 +119,7 @@ object TaskManager {
         }
     }
 
-    suspend fun updateTaskEmbed(kord: dev.kord.core.Kord, task: Task) {
+    suspend fun updateTaskEmbed(kord: Kord, task: Task) {
         if (task.messageId == null) return
         
         try {
