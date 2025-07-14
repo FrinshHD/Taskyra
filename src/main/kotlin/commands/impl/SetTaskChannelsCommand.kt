@@ -28,13 +28,14 @@ class SetTaskChannelsCommand : Command {
 
     override suspend fun execute(event: ChatInputCommandInteractionCreateEvent) {
         val interaction = event.interaction
+        val deferredResponse = interaction.deferEphemeralResponse()
 
         val pendingChannelId = interaction.command.options["pending"]?.value?.toString()
         val inProgressChannelId = interaction.command.options["inprogress"]?.value?.toString()
         val completedChannelId = interaction.command.options["completed"]?.value?.toString()
 
         if (pendingChannelId == null || inProgressChannelId == null || completedChannelId == null) {
-            interaction.deferEphemeralResponse().respond {
+            deferredResponse.respond {
                 content = "❌ All channels must be specified."
             }
             return
@@ -54,14 +55,14 @@ class SetTaskChannelsCommand : Command {
             updateChannelSummary(interaction.kord, inProgressChannelId, TaskState.IN_PROGRESS)
             updateChannelSummary(interaction.kord, completedChannelId, TaskState.COMPLETED)
 
-            interaction.deferEphemeralResponse().respond {
+            deferredResponse.respond {
                 content = "✅ Task channels have been configured successfully!\n" +
                         "📋 Pending: <#$pendingChannelId>\n" +
                         "🔄 In Progress: <#$inProgressChannelId>\n" +
                         "✅ Completed: <#$completedChannelId>"
             }
         } catch (e: Exception) {
-            interaction.deferEphemeralResponse().respond {
+            deferredResponse.respond {
                 content = "❌ Failed to initialize channels: ${e.message}"
             }
         }

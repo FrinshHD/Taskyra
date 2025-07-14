@@ -12,6 +12,7 @@ class UpdateInfoCommand : Command {
 
     override suspend fun execute(event: ChatInputCommandInteractionCreateEvent) {
         val interaction = event.interaction
+        val deferredResponse = interaction.deferEphemeralResponse()
         val config = BotConfig.getInstance()
 
         val pendingChannelId = config.pendingTasksChannelId
@@ -19,7 +20,7 @@ class UpdateInfoCommand : Command {
         val completedChannelId = config.completedTasksChannelId
 
         if (pendingChannelId == null || inProgressChannelId == null || completedChannelId == null) {
-            interaction.deferEphemeralResponse().respond {
+            deferredResponse.respond {
                 content = "❌ Task channels are not configured. Please use `/settaskchannels` first to configure all task channels."
             }
             return
@@ -30,7 +31,7 @@ class UpdateInfoCommand : Command {
             updateChannelSummary(interaction.kord, inProgressChannelId, TaskState.IN_PROGRESS)
             updateChannelSummary(interaction.kord, completedChannelId, TaskState.COMPLETED)
 
-            interaction.deferEphemeralResponse().respond {
+            deferredResponse.respond {
                 content = "✅ Successfully updated info embeds in all task channels!\n" +
                         "📋 Pending: <#$pendingChannelId>\n" +
                         "🔄 In Progress: <#$inProgressChannelId>\n" +
@@ -38,7 +39,7 @@ class UpdateInfoCommand : Command {
             }
 
         } catch (e: Exception) {
-            interaction.deferEphemeralResponse().respond {
+            deferredResponse.respond {
                 content = "❌ Failed to update info embeds: ${e.message}"
             }
         }

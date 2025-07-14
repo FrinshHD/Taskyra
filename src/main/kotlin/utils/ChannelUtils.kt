@@ -2,12 +2,38 @@ package de.frinshy.utils
 
 import de.frinshy.commands.impl.TaskManager
 import de.frinshy.commands.impl.TaskState
+import de.frinshy.commands.impl.Task
 import dev.kord.core.Kord
 import dev.kord.core.behavior.channel.createMessage
 import dev.kord.core.behavior.edit
 import dev.kord.core.entity.channel.TextChannel
 import dev.kord.rest.builder.message.embed
+import dev.kord.rest.builder.message.EmbedBuilder
 import kotlinx.datetime.Clock
+
+fun EmbedBuilder.addTaskFields(task: Task) {
+    field {
+        name = "Status"
+        value = when (task.state) {
+            TaskState.PENDING -> "⏳ Pending"
+            TaskState.IN_PROGRESS -> "🔄 In Progress"
+            TaskState.COMPLETED -> "✅ Completed"
+        }
+        inline = true
+    }
+    field {
+        name = "Task ID"
+        value = "`${task.id}`"
+        inline = true
+    }
+    if (task.assignedUsers.isNotEmpty()) {
+        field {
+            name = "Assigned Users"
+            value = TaskManager.formatAssignedUsers(task.assignedUsers)
+            inline = false
+        }
+    }
+}
 
 suspend fun updateChannelSummary(bot: Kord, channelId: String, taskState: TaskState) {
     try {

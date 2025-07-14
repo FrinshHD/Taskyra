@@ -36,11 +36,16 @@ class PostTaskCommand : Command {
 
     override suspend fun execute(event: ChatInputCommandInteractionCreateEvent) {
         val interaction = event.interaction
+        
+        // Add debugging to track command executions
+        println("🔄 PostTaskCommand.execute() called - User: ${interaction.user.id}, Command: ${interaction.invokedCommandName}")
+        
+        val deferredResponse = interaction.deferEphemeralResponse()
         val config = BotConfig.getInstance()
         val pendingChannelId = config.pendingTasksChannelId
 
         if (pendingChannelId == null) {
-            interaction.deferEphemeralResponse().respond {
+            deferredResponse.respond {
                 content = "❌ No pending tasks channel is set. Please use `/settaskchannels` first to configure all task channels."
             }
             return
@@ -49,7 +54,7 @@ class PostTaskCommand : Command {
         val titleOption = interaction.command.options["title"]
         val titleText = titleOption?.value?.toString()?.trim()
         if (titleText.isNullOrBlank()) {
-            interaction.deferEphemeralResponse().respond {
+            deferredResponse.respond {
                 content = "❌ Please provide a task title."
             }
             return
@@ -61,22 +66,24 @@ class PostTaskCommand : Command {
         try {
             val channel = interaction.kord.getChannelOf<TextChannel>(Snowflake(pendingChannelId))
             if (channel == null) {
-                interaction.deferEphemeralResponse().respond {
+                deferredResponse.respond {
                     content = "❌ Pending tasks channel not found. Please check your channel configuration."
                 }
                 return
             }
 
             val taskId = "${Clock.System.now().epochSeconds}_${(1000..9999).random()}"
+            println("📝 Creating task with ID: $taskId, Title: \"$titleText\"")
 
             val task = Task(
                 id = taskId,
                 title = titleText,
                 description = descriptionText ?: "No description provided",
-                state = TaskState.PENDING
+                state = TaskState.PENDING,
+                messageId = null
             )
-            TaskManager.addTask(task)
 
+            var postedMessageId: String? = null
             channel.createMessage {
                 embed {
                     this.title = titleText
@@ -94,41 +101,76 @@ class PostTaskCommand : Command {
                         value = "`$taskId`"
                         inline = true
                     }
+                    field {
+                        name = "Assigned Users"
+                        value = "_No users assigned_"
+                        inline = false
+                    }
                 }
 
                 actionRow {
-                    interactionButton(
-                        style = ButtonStyle.Primary,
-                        customId = "start-task-$taskId"
-                    ) {
-                        label = "Start Task"
-                        emoji = dev.kord.common.entity.DiscordPartialEmoji(name = "🔄")
-                    }
-                    interactionButton(
-                        style = ButtonStyle.Success,
-                        customId = "complete-task-$taskId"
-                    ) {
-                        label = "Complete"
-                        emoji = dev.kord.common.entity.DiscordPartialEmoji(name = "✅")
-                    }
-                    interactionButton(
-                        style = ButtonStyle.Danger,
-                        customId = "delete-task-$taskId"
-                    ) {
-                        label = "Delete"
-                        emoji = dev.kord.common.entity.DiscordPartialEmoji(name = "🗑️")
+                    if (task.state != TaskState.COMPLETED) {
+                        interactionButton(
+                            style = dev.kord.common.entity.ButtonStyle.Primary,
+                            customId = "toggle-assignment-${task.id}"
+                        ) {
+                            label = "Assign/Unassign Me"
+                        }
+                        interactionButton(
+                            style = dev.kord.common.entity.ButtonStyle.Secondary,
+                            customId = "select-users-${task.id}"
+                        ) {
+                            label = "Select Users"
+                        }
+                        interactionButton(
+                            style = dev.kord.common.entity.ButtonStyle.Secondary,
+                            customId = "mark-in-progress-${task.id}"
+                        ) {
+                            label = "Mark In Progress"
+                        }
+                        interactionButton(
+                            style = dev.kord.common.entity.ButtonStyle.Success,
+                            customId = "mark-completed-${task.id}"
+                        ) {
+                            label = "Mark Completed"
+                        }
                     }
                 }
+                actionRow {
+                    interactionButton(
+                        style = dev.kord.common.entity.ButtonStyle.Danger,
+                        customId = "delete-task-${task.id}"
+                    ) {
+                        label = "Delete Task"
+                    }
+                    
+                    interactionButton(
+                        style = dev.kord.common.entity.ButtonStyle.Secondary,
+                        customId = "edit-task-${task.id}"
+                    ) {
+                        label = "Edit Task"
+                    }
+                }
+            }.let { msg ->
+                postedMessageId = msg.id.toString()
+                println("✅ Message posted with ID: $postedMessageId")
             }
+
+            // Update task with message ID
+            task.messageId = postedMessageId
+            TaskManager.addTask(task)
+            println("💾 Task added to TaskManager")
 
             updateChannelSummary(interaction.kord, pendingChannelId, TaskState.PENDING)
 
-            interaction.deferEphemeralResponse().respond {
+            deferredResponse.respond {
                 content = "✅ Task \"$titleText\" has been created and posted to the pending tasks channel!"
             }
+            println("🎉 PostTaskCommand.execute() completed successfully for task: $taskId")
 
         } catch (e: Exception) {
-            interaction.deferEphemeralResponse().respond {
+            println("❌ PostTaskCommand.execute() failed: ${e.message}")
+            deferredResponse.respond {
                 content = "❌ Failed to create task: ${e.message}"
             }
         }
