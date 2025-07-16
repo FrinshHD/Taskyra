@@ -1,50 +1,33 @@
 package de.frinshy.utils
 
-import de.frinshy.commands.impl.TaskManager
-import de.frinshy.commands.impl.TaskState
-import de.frinshy.commands.impl.Task
-import dev.kord.core.Kord
+import commands.impl.Task
+import commands.impl.TaskManager
+import commands.impl.TaskState
+import de.frinshy.Main.Companion.bot
+import de.frinshy.config.BotConfig
+import dev.kord.common.entity.Snowflake
 import dev.kord.core.behavior.channel.createMessage
 import dev.kord.core.behavior.edit
-import dev.kord.core.entity.channel.TextChannel
 import dev.kord.core.entity.Message
+import dev.kord.core.entity.channel.TextChannel
 import dev.kord.rest.builder.message.embed
-import dev.kord.rest.builder.message.EmbedBuilder
 import kotlinx.datetime.Clock
-import dev.kord.common.entity.Snowflake
 
-fun EmbedBuilder.addTaskFields(task: Task) {
-    field {
-        name = "Status"
-        value = when (task.state) {
-            TaskState.PENDING -> "⏳ Pending"
-            TaskState.IN_PROGRESS -> "🔄 In Progress"
-            TaskState.COMPLETED -> "✅ Completed"
-        }
-        inline = true
-    }
-    field {
-        name = "Task ID"
-        value = "`${task.id}`"
-        inline = true
-    }
-    if (task.assignedUsers.isNotEmpty()) {
-        field {
-            name = "Assigned Users"
-            value = TaskManager.formatAssignedUsers(task.assignedUsers)
-            inline = false
-        }
-    }
-}
-
-suspend fun updateChannelSummary(bot: Kord, channelId: String, taskState: TaskState) {
+suspend fun updateChannelSummary(taskState: TaskState) {
     try {
-        val channel = bot.getChannelOf<TextChannel>(dev.kord.common.entity.Snowflake(channelId))
-        if (channel == null) return
 
-        val config = de.frinshy.config.BotConfig.getInstance()
+        val channelId = when (taskState) {
+            TaskState.PENDING -> BotConfig.instance.pendingTasksChannelId
+            TaskState.IN_PROGRESS -> BotConfig.instance.inProgressTasksChannelId
+            TaskState.COMPLETED -> BotConfig.instance.completedTasksChannelId
+        }
+
+        val channel = bot.getChannelOf<TextChannel>(Snowflake(channelId ?: return)) ?: return
+
+        val config = BotConfig.instance
 
         val tasks = TaskManager.getTasksByState(taskState)
+
         val (title, colorValue) = when (taskState) {
             TaskState.PENDING -> Pair("📋 Pending Tasks Summary", 0xFFD700)
             TaskState.IN_PROGRESS -> Pair("⚠️ Tasks In Progress Summary", 0xFF8C00)
@@ -57,16 +40,17 @@ suspend fun updateChannelSummary(bot: Kord, channelId: String, taskState: TaskSt
             TaskState.COMPLETED -> config.completedTasksSummaryMessageId
         }
 
-        var summaryMessage: dev.kord.core.entity.Message? = null
+        var summaryMessage: Message? = null
         if (summaryMessageId != null) {
             try {
-                summaryMessage = channel.getMessage(dev.kord.common.entity.Snowflake(summaryMessageId))
+                summaryMessage = channel.getMessage(Snowflake(summaryMessageId))
                 summaryMessage.edit {
                     embeds = mutableListOf()
                     embed {
                         this.title = title
                         this.color = dev.kord.common.Color(colorValue)
-                        this.description = "Total ${taskState.name.lowercase().replace("_", " ")} tasks: **${tasks.size}**"
+                        this.description =
+                            "Total ${taskState.name.lowercase().replace("_", " ")} tasks: **${tasks.size}**"
                         this.timestamp = Clock.System.now()
                     }
                 }
@@ -90,7 +74,7 @@ suspend fun updateChannelSummary(bot: Kord, channelId: String, taskState: TaskSt
                 TaskState.IN_PROGRESS -> config.copy(inProgressTasksSummaryMessageId = summaryMessage.id.toString())
                 TaskState.COMPLETED -> config.copy(completedTasksSummaryMessageId = summaryMessage.id.toString())
             }
-            de.frinshy.config.BotConfig.updateInstance(newConfig)
+            BotConfig.updateInstance(newConfig)
         }
 
     } catch (e: Exception) {
@@ -98,10 +82,10 @@ suspend fun updateChannelSummary(bot: Kord, channelId: String, taskState: TaskSt
     }
 }
 
-suspend fun performStartupValidation(bot: Kord) {
+suspend fun performStartupValidation() {
     println("🔄 Starting up - Validating task data and cleaning up channels...")
 
-    val config = de.frinshy.config.BotConfig.getInstance()
+    val config = BotConfig.instance
     val channelsToValidate = listOf(
         Pair(config.inProgressTasksChannelId, TaskState.IN_PROGRESS),
         Pair(config.completedTasksChannelId, TaskState.COMPLETED)
@@ -205,30 +189,30 @@ suspend fun performStartupValidation(bot: Kord) {
             }
 
             if (deletedCount > 0) {
-                println("🧹 Deleted $deletedCount orphaned messages from ${taskState.name.lowercase().replace("_", " ")} channel")
+                println(
+                    "🧹 Deleted $deletedCount orphaned messages from ${
+                        taskState.name.lowercase().replace("_", " ")
+                    } channel"
+                )
             }
-
         } catch (e: Exception) {
             println("❌ Error cleaning up channel $channelId: ${e.message}")
         }
     }
 
-    // Step 3: Update all info embeds
     println("📊 Updating all category info embeds...")
-
-    for ((channelId, taskState) in channelsToValidate) {
+    for ((_, taskState) in channelsToValidate) {
         try {
-            updateChannelSummary(bot, channelId, taskState)
-            kotlinx.coroutines.delay(200) // Small delay between updates
+            updateChannelSummary(taskState)
+            kotlinx.coroutines.delay(200)
         } catch (e: Exception) {
             println("❌ Failed to update summary for ${taskState.name}: ${e.message}")
         }
     }
 
-    // Also update pending if it has a channel configured
-    config.pendingTasksChannelId?.let { channelId ->
+    config.pendingTasksChannelId?.let {
         try {
-            updateChannelSummary(bot, channelId, TaskState.PENDING)
+            updateChannelSummary(TaskState.PENDING)
         } catch (e: Exception) {
             println("❌ Failed to update pending summary: ${e.message}")
         }

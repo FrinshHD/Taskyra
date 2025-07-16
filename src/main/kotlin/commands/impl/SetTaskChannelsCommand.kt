@@ -1,5 +1,6 @@
 package de.frinshy.commands.impl
 
+import commands.impl.TaskState
 import de.frinshy.commands.Command
 import de.frinshy.commands.SlashCommand
 import de.frinshy.config.BotConfig
@@ -41,7 +42,7 @@ class SetTaskChannelsCommand : Command {
             return
         }
 
-        val currentConfig = BotConfig.getInstance()
+        val currentConfig = BotConfig.instance
         val newConfig = currentConfig.copy(
             pendingTasksChannelId = pendingChannelId,
             inProgressTasksChannelId = inProgressChannelId,
@@ -51,9 +52,9 @@ class SetTaskChannelsCommand : Command {
         BotConfig.updateInstance(newConfig)
 
         try {
-            updateChannelSummary(interaction.kord, pendingChannelId, TaskState.PENDING)
-            updateChannelSummary(interaction.kord, inProgressChannelId, TaskState.IN_PROGRESS)
-            updateChannelSummary(interaction.kord, completedChannelId, TaskState.COMPLETED)
+            updateChannelSummary(TaskState.PENDING)
+            updateChannelSummary(TaskState.IN_PROGRESS)
+            updateChannelSummary(TaskState.COMPLETED)
 
             deferredResponse.respond {
                 content = "✅ Task channels have been configured successfully!\n" +

@@ -45,5 +45,6 @@ bin/
 .DS_Store
 
 .env
-/config.json
-/tasks.json
+/config/config.json
+/config/tasks.json
+/config/

@@ -1,14 +1,13 @@
 package de.frinshy.commands
 
-import dev.kord.core.Kord
-import dev.kord.core.behavior.interaction.response.respond
+import de.frinshy.Main.Companion.bot
 import dev.kord.core.event.interaction.ChatInputCommandInteractionCreateEvent
 import org.reflections.Reflections
 import org.reflections.scanners.Scanners
 import kotlin.reflect.KClass
 import kotlin.reflect.full.createInstance
 
-class CommandHandler(private val bot: Kord) {
+object CommandHandler {
     private val commands = mutableMapOf<String, Command>()
 
     suspend fun registerCommands() {
@@ -55,9 +54,9 @@ class CommandHandler(private val bot: Kord) {
         val commandName = event.interaction.invokedCommandName
         val userId = event.interaction.user.id
         val interactionId = event.interaction.id
-        
+
         println("🎯 Handling command: '$commandName' from user: $userId, interaction: $interactionId")
-        
+
         val command = commands[commandName]
 
         if (command != null) {
@@ -66,22 +65,23 @@ class CommandHandler(private val bot: Kord) {
             } catch (e: Exception) {
                 println("❌ Error executing command '$commandName': ${e.message}")
                 e.printStackTrace()
-                
+
                 // Check if this is an interaction already acknowledged error
-                if (e.message?.contains("already been acknowledged") == true || 
-                    e.message?.contains("Unknown interaction") == true) {
-                    println("⚠️  Command interaction already handled or expired")
+                if (e.message?.contains("already been acknowledged") == true ||
+                    e.message?.contains("Unknown interaction") == true
+                ) {
+                    println("⚠️ Command interaction already handled or expired")
                     return
                 }
-                
+
                 try {
                     event.interaction.deferEphemeralResponse()
                 } catch (responseError: Exception) {
-                    println("⚠️  Could not send error response to user: ${responseError.message}")
+                    println("⚠️ Could not send error response to user: ${responseError.message}")
                 }
             }
         } else {
-            println("⚠️  Unknown command: $commandName")
+            println("⚠️ Unknown command: $commandName")
         }
     }
 }

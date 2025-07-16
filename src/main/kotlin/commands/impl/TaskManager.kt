@@ -1,16 +1,26 @@
-package de.frinshy.commands.impl
+package commands.impl
 
+import de.frinshy.Main
+import de.frinshy.config.BotConfig
+import dev.kord.common.Color
+import dev.kord.common.entity.Snowflake
+import dev.kord.core.behavior.channel.createMessage
+import dev.kord.core.behavior.edit
+import dev.kord.core.entity.Message
+import dev.kord.core.entity.channel.TextChannel
+import dev.kord.rest.builder.message.EmbedBuilder
+import dev.kord.rest.builder.message.MessageBuilder
+import dev.kord.rest.builder.message.actionRow
+import dev.kord.rest.builder.message.embed
+import kotlinx.datetime.Clock
+import kotlinx.datetime.Instant
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.encodeToString
-import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.json.Json
+import utils.ButtonRegistry.getButtonByType
+import utils.ButtonType
+import utils.TaskButton
 import java.io.File
-import dev.kord.core.behavior.edit
-import dev.kord.rest.builder.message.embed
-import dev.kord.rest.builder.message.EmbedBuilder
-import dev.kord.common.entity.ButtonStyle
-import dev.kord.core.Kord
-import dev.kord.rest.builder.message.actionRow
 
 @Serializable
 enum class TaskState {
@@ -26,32 +36,22 @@ data class Task(
     val description: String,
     var state: TaskState = TaskState.PENDING,
     var assignedUsers: MutableList<String> = mutableListOf(),
-    var messageId: String? = null, // Discord message ID for embed
-    @Deprecated("Use state instead")
-    var completed: Boolean = false
-) {
-    fun migrateToState(): Task {
-        if (completed && state == TaskState.PENDING) {
-            return this.copy(state = TaskState.COMPLETED)
-        }
-        return this
-    }
-}
+    var messageId: String? = null,
+)
 
 object TaskManager {
-    private val file = File("tasks.json")
+    private val file = File("config/tasks.json")
     private val json = Json { prettyPrint = true }
     private var tasks: MutableList<Task> = loadTasks().toMutableList()
 
     fun addTask(task: Task) {
-        tasks.add(task.migrateToState())
+        tasks.add(task)
         saveTasks()
     }
 
     fun updateTaskState(id: String, newState: TaskState) {
         tasks.find { it.id == id }?.let {
             it.state = newState
-            it.completed = (newState == TaskState.COMPLETED)
             saveTasks()
         }
     }
@@ -67,17 +67,15 @@ object TaskManager {
         return false
     }
 
-    fun unassignUserFromTask(taskId: String, userId: String): Boolean {
+    fun unassignUserFromTask(taskId: String, userId: String) {
         tasks.find { it.id == taskId }?.let { task ->
             if (task.assignedUsers.remove(userId)) {
                 saveTasks()
-                return true
             }
         }
-        return false
     }
 
-    fun getTaskById(id: String): Task? = tasks.find { it.id == id }?.migrateToState()
+    fun getTaskById(id: String): Task? = tasks.find { it.id == id }
 
     fun removeTask(id: String) {
         tasks.removeAll { it.id == id }
@@ -94,7 +92,7 @@ object TaskManager {
         updateTaskState(id, TaskState.COMPLETED)
     }
 
-    fun getTasks(): List<Task> = tasks.map { it.migrateToState() }
+    fun getTasks(): List<Task> = tasks
 
     fun getTasksByState(state: TaskState): List<Task> = getTasks().filter { it.state == state }
 
@@ -106,121 +104,53 @@ object TaskManager {
         return if (file.exists()) {
             try {
                 val loadedTasks: List<Task> = json.decodeFromString(file.readText())
-                loadedTasks.map { it.migrateToState() }
-            } catch (e: Exception) {
+                loadedTasks.toList()
+            } catch (_: Exception) {
                 emptyList()
             }
         } else emptyList()
     }
 
     fun formatAssignedUsers(assignedUsers: List<String>): String {
-        return assignedUsers.joinToString(", ") { 
+        return assignedUsers.joinToString(", ") {
             if (it.matches(Regex("\\d+"))) "<@$it>" else it
         }
     }
 
-    suspend fun updateTaskEmbed(kord: Kord, task: Task) {
+    fun buildTaskMessage(
+        task: Task,
+        state: TaskState = task.state,
+        timestamp: Instant = Clock.System.now()
+    ): MessageBuilder.() -> Unit = {
+        embed {
+            this.title = task.title
+            this.color = when (state) {
+                TaskState.PENDING -> Color(0xFFD700)
+                TaskState.IN_PROGRESS -> Color(0xFF8C00)
+                TaskState.COMPLETED -> Color(0x43B581)
+            }
+            this.description = task.description
+            this.timestamp = timestamp
+            addTaskEmbedFields(task, this)
+        }
+        addTaskActionRows(task.id, state, this)
+    }
+
+    suspend fun updateTaskEmbed(task: Task) {
         if (task.messageId == null) return
-        
         try {
-            val config = de.frinshy.config.BotConfig.getInstance()
+            val config = BotConfig.instance
             val channelId = when (task.state) {
                 TaskState.PENDING -> config.pendingTasksChannelId
                 TaskState.IN_PROGRESS -> config.inProgressTasksChannelId
                 TaskState.COMPLETED -> config.completedTasksChannelId
-            }
-            
-            if (channelId == null) return
-            
-            val channel = kord.getChannelOf<dev.kord.core.entity.channel.TextChannel>(
-                dev.kord.common.entity.Snowflake(channelId)
-            ) ?: return
-            
-            val message = channel.getMessage(dev.kord.common.entity.Snowflake(task.messageId!!))
-            
+            } ?: return
+            val channel = Main.bot.getChannelOf<TextChannel>(Snowflake(channelId)) ?: return
+            val message = channel.getMessage(Snowflake(task.messageId!!))
             message.edit {
                 embeds = mutableListOf()
-                embed {
-                    this.title = task.title
-                    this.color = when (task.state) {
-                        TaskState.PENDING -> dev.kord.common.Color(0xFFD700)
-                        TaskState.IN_PROGRESS -> dev.kord.common.Color(0xFF8C00)
-                        TaskState.COMPLETED -> dev.kord.common.Color(0x43B581)
-                    }
-                    this.description = task.description
-                    this.timestamp = kotlinx.datetime.Clock.System.now()
-
-                    field {
-                        name = "Status"
-                        value = when (task.state) {
-                            TaskState.PENDING -> "⏳ Pending"
-                            TaskState.IN_PROGRESS -> "🔄 In Progress"
-                            TaskState.COMPLETED -> "✅ Completed"
-                        }
-                        inline = true
-                    }
-                    field {
-                        name = "Task ID"
-                        value = "`${task.id}`"
-                        inline = true
-                    }
-                    // Always include assigned users field, even if empty
-                    field {
-                        name = "Assigned Users"
-                        value = if (task.assignedUsers.isNotEmpty()) {
-                            formatAssignedUsers(task.assignedUsers)
-                        } else {
-                            "_No users assigned_"
-                        }
-                        inline = false
-                    }
-                }
-                
-                // Update buttons as well
                 components = mutableListOf()
-                actionRow {
-                    if (task.state != TaskState.COMPLETED) {
-                        interactionButton(
-                            style = dev.kord.common.entity.ButtonStyle.Primary,
-                            customId = "toggle-assignment-${task.id}"
-                        ) {
-                            label = "Assign/Unassign Me"
-                        }
-                        interactionButton(
-                            style = dev.kord.common.entity.ButtonStyle.Secondary,
-                            customId = "select-users-${task.id}"
-                        ) {
-                            label = "Select Users"
-                        }
-                        interactionButton(
-                            style = dev.kord.common.entity.ButtonStyle.Secondary,
-                            customId = "mark-in-progress-${task.id}"
-                        ) {
-                            label = "Mark In Progress"
-                        }
-                        interactionButton(
-                            style = dev.kord.common.entity.ButtonStyle.Success,
-                            customId = "mark-completed-${task.id}"
-                        ) {
-                            label = "Mark Completed"
-                        }
-                    }
-                }
-                actionRow {
-                    interactionButton(
-                        style = dev.kord.common.entity.ButtonStyle.Danger,
-                        customId = "delete-task-${task.id}"
-                    ) {
-                        label = "Delete Task"
-                    }
-                    
-                    interactionButton(
-                        style = dev.kord.common.entity.ButtonStyle.Secondary,
-                        customId = "edit-task-${task.id}"
-                    ) {
-                        label = "Edit Task"
-                    }
-                }
+                buildTaskMessage(task, task.state, Clock.System.now()).invoke(this)
             }
         } catch (e: Exception) {
             println("❌ Failed to update task embed: ${e.message}")
@@ -231,8 +161,7 @@ object TaskManager {
     fun updateTask(id: String, newTitle: String? = null, newDescription: String? = null) {
         tasks.find { it.id == id }?.let { task ->
             val updatedTask = task.copy(
-                title = newTitle ?: task.title,
-                description = newDescription ?: task.description
+                title = newTitle ?: task.title, description = newDescription ?: task.description
             )
             val index = tasks.indexOf(task)
             tasks[index] = updatedTask
@@ -245,5 +174,105 @@ object TaskManager {
             task.messageId = newMessageId
             saveTasks()
         }
+    }
+
+    suspend fun moveTaskToCategory(
+        taskId: String, targetState: TaskState
+    ) {
+        val config = BotConfig.instance
+
+        val channelId = when (targetState) {
+            TaskState.PENDING -> config.pendingTasksChannelId
+            TaskState.IN_PROGRESS -> config.inProgressTasksChannelId
+            TaskState.COMPLETED -> config.completedTasksChannelId
+        } ?: return
+
+        val oldChannelId: String = when (getTaskById(taskId)?.state) {
+            TaskState.PENDING -> config.pendingTasksChannelId
+            TaskState.IN_PROGRESS -> config.inProgressTasksChannelId
+            TaskState.COMPLETED -> config.completedTasksChannelId
+            null -> null
+        } ?: return
+
+        val oldChannel = Main.bot.getChannelOf<TextChannel>(Snowflake(oldChannelId)) ?: return
+
+        val channel = Main.bot.getChannelOf<TextChannel>(Snowflake(channelId)) ?: return
+        val task = getTasks().find { it.id == taskId } ?: return
+
+        updateTaskState(taskId, targetState)
+
+        task.messageId?.let {
+            try {
+                oldChannel.getMessage(Snowflake(it)).delete()
+            } catch (_: Exception) {
+            }
+        }
+
+        val newMessage = sendTaskEmbedMessage(channel, task, targetState)
+        updateTaskMessageId(taskId, newMessage.id.toString())
+    }
+
+    fun addTaskEmbedFields(
+        task: Task, embedBuilder: EmbedBuilder
+    ) {
+        embedBuilder.field {
+            name = "Status"
+            value = when (task.state) {
+                TaskState.PENDING -> "⏳ Pending"
+                TaskState.IN_PROGRESS -> "🔄 In Progress"
+                TaskState.COMPLETED -> "✅ Completed"
+            }
+            inline = true
+        }
+        embedBuilder.field {
+            name = "Task ID"
+            value = "`" + task.id + "`"
+            inline = true
+        }
+        embedBuilder.field {
+            name = "Assigned Users"
+            value = if (task.assignedUsers.isNotEmpty()) {
+                formatAssignedUsers(task.assignedUsers)
+            } else {
+                "_No users assigned_"
+            }
+            inline = false
+        }
+    }
+
+    fun addTaskActionRows(taskId: String, state: TaskState, builder: MessageBuilder) {
+        val buttons = mutableListOf<TaskButton>()
+        when (state) {
+            TaskState.PENDING -> {
+                getButtonByType(ButtonType.START_TASK)?.let { buttons.add(it) }
+                getButtonByType(ButtonType.COMPLETE_TASK)?.let { buttons.add(it) }
+                getButtonByType(ButtonType.SELECT_USERS)?.let { buttons.add(it) }
+                getButtonByType(ButtonType.ASSIGN_ME)?.let { buttons.add(it) }
+                getButtonByType(ButtonType.EDIT_TASK)?.let { buttons.add(it) }
+            }
+
+            TaskState.IN_PROGRESS -> {
+                getButtonByType(ButtonType.COMPLETE_TASK)?.let { buttons.add(it) }
+                getButtonByType(ButtonType.PAUSE_TASK)?.let { buttons.add(it) }
+                getButtonByType(ButtonType.SELECT_USERS)?.let { buttons.add(it) }
+                getButtonByType(ButtonType.ASSIGN_ME)?.let { buttons.add(it) }
+                getButtonByType(ButtonType.EDIT_TASK)?.let { buttons.add(it) }
+            }
+
+            TaskState.COMPLETED -> {
+                getButtonByType(ButtonType.REOPEN_TASK)?.let { buttons.add(it) }
+            }
+        }
+        getButtonByType(ButtonType.DELETE_TASK)?.let { buttons.add(it) }
+
+        buttons.chunked(5).forEach { btnGroup ->
+            builder.actionRow {
+                btnGroup.forEach { it.addToActionRow(taskId, this) }
+            }
+        }
+    }
+
+    suspend fun sendTaskEmbedMessage(channel: TextChannel, task: Task, state: TaskState = task.state): Message {
+        return channel.createMessage(buildTaskMessage(task, state = state)).also { task.messageId = it.id.toString() }
     }
 }

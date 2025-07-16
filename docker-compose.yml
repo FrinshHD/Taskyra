@@ -1,0 +1,7 @@
+services:
+  taskyra-bot:
+    build: .
+    volumes:
+      - ./config:/app/config
+      - .env:/app/.env
+    restart: unless-stopped
