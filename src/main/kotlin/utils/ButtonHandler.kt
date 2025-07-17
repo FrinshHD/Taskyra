@@ -24,8 +24,13 @@ abstract class TaskButton(
     open val style: ButtonStyle
 ) {
     open val id: String get() = type.name.lowercase().replace("_", "-")
+
     open suspend fun handle(task: Task, event: ComponentInteractionCreateEvent) {
         event.interaction.deferPublicMessageUpdate()
+        handle(task, event.interaction.data.guildId?.value.toString() ?: return)
+    }
+
+    open suspend fun handle(task: Task, guildId: String) {
         handle(task)
     }
 

@@ -35,13 +35,18 @@ class PostTaskCommand : Command {
         println("🔄 PostTaskCommand.execute() called - User: ${interaction.user.id}, Command: ${interaction.invokedCommandName}")
 
         val deferredResponse = interaction.deferEphemeralResponse()
-        val config = BotConfig.instance
-        val pendingChannelId = config.pendingTasksChannelId
-
+        val guildId = interaction.data.guildId.value?.toString() ?: return
+        val guildConfig = BotConfig.instance.guilds.find { it.guildId == guildId }
+        if (guildConfig == null) {
+            deferredResponse.respond {
+                content = "❌ No pending tasks channel is set for this server. Please use `/settaskchannels` first."
+            }
+            return
+        }
+        val pendingChannelId = guildConfig.pendingTasksChannelId
         if (pendingChannelId == null) {
             deferredResponse.respond {
-                content =
-                    "❌ No pending tasks channel is set. Please use `/settaskchannels` first to configure all task channels."
+                content = "❌ No pending tasks channel is set. Please use `/settaskchannels` first to configure all task channels."
             }
             return
         }
@@ -87,7 +92,7 @@ class PostTaskCommand : Command {
             task.messageId = postedMessageId
             TaskManager.addTask(task)
 
-            updateChannelSummary(TaskState.PENDING)
+            updateChannelSummary(guildId, TaskState.PENDING)
 
             deferredResponse.respond {
                 content = "✅ Task \"$titleText\" has been created and posted to the pending tasks channel!"

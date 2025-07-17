@@ -42,19 +42,35 @@ class SetTaskChannelsCommand : Command {
             return
         }
 
-        val currentConfig = BotConfig.instance
-        val newConfig = currentConfig.copy(
-            pendingTasksChannelId = pendingChannelId,
-            inProgressTasksChannelId = inProgressChannelId,
-            completedTasksChannelId = completedChannelId
-        )
+        val guildId = interaction.data.guildId.value?.toString() ?: return
 
-        BotConfig.updateInstance(newConfig)
+        val currentConfig = BotConfig.instance
+        val updatedGuilds =
+            if (currentConfig.guilds.any { it.guildId == guildId }) {
+                currentConfig.guilds.map {
+                    if (it.guildId == guildId) it.copy(
+                        pendingTasksChannelId = pendingChannelId,
+                        inProgressTasksChannelId = inProgressChannelId,
+                        completedTasksChannelId = completedChannelId
+                    ) else it
+                }
+            } else {
+                currentConfig.guilds + listOf(
+                    de.frinshy.config.GuildConfig(
+                        guildId = guildId,
+                        pendingTasksChannelId = pendingChannelId,
+                        inProgressTasksChannelId = inProgressChannelId,
+                        completedTasksChannelId = completedChannelId
+                    )
+                )
+            }
+
+        BotConfig.updateInstance(currentConfig.copy(guilds = updatedGuilds))
 
         try {
-            updateChannelSummary(TaskState.PENDING)
-            updateChannelSummary(TaskState.IN_PROGRESS)
-            updateChannelSummary(TaskState.COMPLETED)
+            updateChannelSummary(guildId, TaskState.PENDING)
+            updateChannelSummary(guildId, TaskState.IN_PROGRESS)
+            updateChannelSummary(guildId, TaskState.COMPLETED)
 
             deferredResponse.respond {
                 content = "✅ Task channels have been configured successfully!\n" +

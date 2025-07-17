@@ -64,7 +64,10 @@ object BotEventHandler {
         val success = TaskManager.assignUserToTask(taskId, userId)
         val displayName = if (userId.matches(Regex("\\d+"))) "<@$userId>" else "\"$userId\""
         if (success) {
-            TaskManager.getTaskById(taskId)?.let { TaskManager.updateTaskEmbed(it) }
+            val guildId = interaction.data.guildId.value?.toString() ?: return
+            TaskManager.getTaskById(taskId)?.let { t ->
+                TaskManager.updateTaskEmbed(guildId, t)
+            }
             interaction.respondEphemeral { content = "✅ Successfully assigned $displayName to task \"${task.title}\"!" }
         } else {
             interaction.respondEphemeral { content = "⚠️ $displayName is already assigned to task \"${task.title}\"." }
@@ -86,7 +89,10 @@ object BotEventHandler {
             return
         }
         TaskManager.updateTask(taskId, newTitle, newDescription)
-        TaskManager.getTaskById(taskId)?.let { TaskManager.updateTaskEmbed(it) }
+        val guildId = interaction.data.guildId.value?.toString() ?: return
+        TaskManager.getTaskById(taskId)?.let { t ->
+            TaskManager.updateTaskEmbed(guildId, t)
+        }
         interaction.respondEphemeral { content = "✅ Task \"${newTitle}\" has been updated successfully!" }
     }
 }

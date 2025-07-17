@@ -17,10 +17,10 @@ class StartTaskTaskButton : TaskButton(
     label = "Start Task",
     style = ButtonStyle.Primary
 ) {
-    override suspend fun handle(task: Task) {
-        TaskManager.moveTaskToCategory(task.id, TaskState.IN_PROGRESS)
-        updateChannelSummary(TaskState.PENDING)
-        updateChannelSummary(TaskState.IN_PROGRESS)
+    override suspend fun handle(task: Task, guildId: String) {
+        TaskManager.moveTaskToCategory(guildId, task.id, TaskState.IN_PROGRESS)
+        updateChannelSummary(guildId, TaskState.PENDING)
+        updateChannelSummary(guildId, TaskState.IN_PROGRESS)
     }
 }
 
@@ -29,11 +29,11 @@ class CompleteTaskTaskButton : TaskButton(
     label = "Complete",
     style = ButtonStyle.Success
 ) {
-    override suspend fun handle(task: Task) {
-        TaskManager.moveTaskToCategory(task.id, TaskState.COMPLETED)
-        updateChannelSummary(TaskState.PENDING)
-        updateChannelSummary(TaskState.IN_PROGRESS)
-        updateChannelSummary(TaskState.COMPLETED)
+    override suspend fun handle(task: Task, guildId: String) {
+        TaskManager.moveTaskToCategory(guildId, task.id, TaskState.COMPLETED)
+        updateChannelSummary(guildId, TaskState.PENDING)
+        updateChannelSummary(guildId, TaskState.IN_PROGRESS)
+        updateChannelSummary(guildId, TaskState.COMPLETED)
     }
 }
 
@@ -42,10 +42,10 @@ class PauseTaskTaskButton : TaskButton(
     label = "Pause",
     style = ButtonStyle.Secondary
 ) {
-    override suspend fun handle(task: Task) {
-        TaskManager.moveTaskToCategory(task.id, TaskState.PENDING)
-        updateChannelSummary(TaskState.PENDING)
-        updateChannelSummary(TaskState.IN_PROGRESS)
+    override suspend fun handle(task: Task, guildId: String) {
+        TaskManager.moveTaskToCategory(guildId, task.id, TaskState.PENDING)
+        updateChannelSummary(guildId, TaskState.PENDING)
+        updateChannelSummary(guildId, TaskState.IN_PROGRESS)
     }
 }
 
@@ -54,10 +54,10 @@ class ReopenTaskTaskButton : TaskButton(
     label = "Reopen",
     style = ButtonStyle.Secondary
 ) {
-    override suspend fun handle(task: Task) {
-        TaskManager.moveTaskToCategory(task.id, TaskState.PENDING)
-        updateChannelSummary(TaskState.PENDING)
-        updateChannelSummary(TaskState.COMPLETED)
+    override suspend fun handle(task: Task, guildId: String) {
+        TaskManager.moveTaskToCategory(guildId, task.id, TaskState.PENDING)
+        updateChannelSummary(guildId, TaskState.PENDING)
+        updateChannelSummary(guildId, TaskState.COMPLETED)
     }
 }
 
@@ -66,21 +66,21 @@ class DeleteTaskTaskButton : TaskButton(
     label = "Delete",
     style = ButtonStyle.Danger
 ) {
-    override suspend fun handle(task: Task) {
-        val task = TaskManager.getTaskById(task.id) ?: return
+    override suspend fun handle(task: Task, guildId: String) {
+        val guildConfig = BotConfig.instance.guilds.find { it.guildId == guildId } ?: return
 
-        when (task.state) {
-            TaskState.PENDING -> BotConfig.instance.pendingTasksChannelId
-            TaskState.IN_PROGRESS -> BotConfig.instance.inProgressTasksChannelId
-            TaskState.COMPLETED -> BotConfig.instance.completedTasksChannelId
-        }?.let { channelId ->
-            val message = MessageHelper.getMessage(channelId, task.messageId) ?: return@let
+        val channelId = when (task.state) {
+            TaskState.PENDING -> guildConfig.pendingTasksChannelId
+            TaskState.IN_PROGRESS -> guildConfig.inProgressTasksChannelId
+            TaskState.COMPLETED -> guildConfig.completedTasksChannelId
+        }
+        channelId?.let {
+            val message = MessageHelper.getMessage(it, task.messageId) ?: return@let
             message.delete()
         }
 
         TaskManager.removeTask(task.id)
-
-        updateChannelSummary(task.state)
+        updateChannelSummary(guildId, task.state)
     }
 }
 
@@ -104,17 +104,18 @@ class SelectUsersTaskButton : TaskButton(
 
 class AssignMeTaskButton : TaskButton(
     type = ButtonType.ASSIGN_ME,
-    label = "Assign to Me",
+    label = "Assign/Unassign to Me",
     style = ButtonStyle.Secondary
 ) {
     override suspend fun handle(task: Task, event: ComponentInteractionCreateEvent) {
         val userId = event.interaction.user.id.toString()
+        val guildId = event.interaction.data.guildId.value?.toString() ?: return
 
         val isCurrentlyAssigned = task.assignedUsers.contains(userId)
 
         if (isCurrentlyAssigned) {
             TaskManager.unassignUserFromTask(task.id, userId)
-            TaskManager.updateTaskEmbed(task)
+            TaskManager.updateTaskEmbed(guildId, task)
 
             event.interaction.respondEphemeral {
                 content = "✅ Successfully unassigned yourself from task \"${task.title}\"!"
@@ -124,7 +125,7 @@ class AssignMeTaskButton : TaskButton(
         }
 
         TaskManager.assignUserToTask(task.id, userId)
-        TaskManager.updateTaskEmbed(task)
+        TaskManager.updateTaskEmbed(guildId, task)
 
         event.interaction.respondEphemeral {
             content = "✅ Successfully assigned yourself to task \"${task.title}\"!"

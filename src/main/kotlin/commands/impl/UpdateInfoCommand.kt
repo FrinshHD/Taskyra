@@ -13,21 +13,28 @@ class UpdateInfoCommand : Command {
     override suspend fun execute(event: ChatInputCommandInteractionCreateEvent) {
         val interaction = event.interaction
         val deferredResponse = interaction.deferEphemeralResponse()
-        val config = BotConfig.instance
-        val pendingChannelId = config.pendingTasksChannelId
-        val inProgressChannelId = config.inProgressTasksChannelId
-        val completedChannelId = config.completedTasksChannelId
+        val guildId = interaction.data.guildId.value?.toString() ?: return
+        
+        val guildConfig = BotConfig.instance.guilds.find { it.guildId == guildId }
+        if (guildConfig == null) {
+            deferredResponse.respond {
+                content = "❌ Task channels are not configured for this server. Please use `/settaskchannels` first."
+            }
+            return
+        }
+        val pendingChannelId = guildConfig.pendingTasksChannelId
+        val inProgressChannelId = guildConfig.inProgressTasksChannelId
+        val completedChannelId = guildConfig.completedTasksChannelId
         if (pendingChannelId == null || inProgressChannelId == null || completedChannelId == null) {
             deferredResponse.respond {
-                content =
-                    "❌ Task channels are not configured. Please use `/settaskchannels` first to configure all task channels."
+                content = "❌ Task channels are not configured. Please use `/settaskchannels` first to configure all task channels."
             }
             return
         }
         try {
-            updateChannelSummary(TaskState.PENDING)
-            updateChannelSummary(TaskState.IN_PROGRESS)
-            updateChannelSummary(TaskState.COMPLETED)
+            updateChannelSummary(guildId, TaskState.PENDING)
+            updateChannelSummary(guildId, TaskState.IN_PROGRESS)
+            updateChannelSummary(guildId, TaskState.COMPLETED)
             deferredResponse.respond {
                 content = "✅ Successfully updated info embeds in all task channels!\n" +
                         "📋 Pending: <#$pendingChannelId>\n" +

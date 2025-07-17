@@ -94,7 +94,12 @@ object TaskManager {
 
     fun getTasks(): List<Task> = tasks
 
-    fun getTasksByState(state: TaskState): List<Task> = getTasks().filter { it.state == state }
+    // Returns all tasks for a given guild
+    fun getTasksByGuild(guildId: String): List<Task> = getTasks().filter { it.id.startsWith("${guildId}_") }
+
+    // Returns all tasks for a given guild and state
+    fun getTasksByState(guildId: String, state: TaskState): List<Task> =
+        getTasksByGuild(guildId).filter { it.state == state }
 
     private fun saveTasks() {
         file.writeText(json.encodeToString(tasks))
@@ -136,14 +141,14 @@ object TaskManager {
         addTaskActionRows(task.id, state, this)
     }
 
-    suspend fun updateTaskEmbed(task: Task) {
+    suspend fun updateTaskEmbed(guildId: String, task: Task) {
         if (task.messageId == null) return
         try {
-            val config = BotConfig.instance
+            val guildConfig = BotConfig.instance.guilds.find { it.guildId == guildId } ?: return
             val channelId = when (task.state) {
-                TaskState.PENDING -> config.pendingTasksChannelId
-                TaskState.IN_PROGRESS -> config.inProgressTasksChannelId
-                TaskState.COMPLETED -> config.completedTasksChannelId
+                TaskState.PENDING -> guildConfig.pendingTasksChannelId
+                TaskState.IN_PROGRESS -> guildConfig.inProgressTasksChannelId
+                TaskState.COMPLETED -> guildConfig.completedTasksChannelId
             } ?: return
             val channel = Main.bot.getChannelOf<TextChannel>(Snowflake(channelId)) ?: return
             val message = channel.getMessage(Snowflake(task.messageId!!))
@@ -177,25 +182,25 @@ object TaskManager {
     }
 
     suspend fun moveTaskToCategory(
-        taskId: String, targetState: TaskState
+        guildId: String, taskId: String, targetState: TaskState
     ) {
-        val config = BotConfig.instance
+        val guildConfig = BotConfig.instance.guilds.find { it.guildId == guildId } ?: return
 
         val channelId = when (targetState) {
-            TaskState.PENDING -> config.pendingTasksChannelId
-            TaskState.IN_PROGRESS -> config.inProgressTasksChannelId
-            TaskState.COMPLETED -> config.completedTasksChannelId
+            TaskState.PENDING -> guildConfig.pendingTasksChannelId
+            TaskState.IN_PROGRESS -> guildConfig.inProgressTasksChannelId
+            TaskState.COMPLETED -> guildConfig.completedTasksChannelId
         } ?: return
 
-        val oldChannelId: String = when (getTaskById(taskId)?.state) {
-            TaskState.PENDING -> config.pendingTasksChannelId
-            TaskState.IN_PROGRESS -> config.inProgressTasksChannelId
-            TaskState.COMPLETED -> config.completedTasksChannelId
-            null -> null
+        val oldTask = getTaskById(taskId)
+        val oldChannelId: String = when (oldTask?.state) {
+            TaskState.PENDING -> guildConfig.pendingTasksChannelId
+            TaskState.IN_PROGRESS -> guildConfig.inProgressTasksChannelId
+            TaskState.COMPLETED -> guildConfig.completedTasksChannelId
+            null -> return
         } ?: return
 
         val oldChannel = Main.bot.getChannelOf<TextChannel>(Snowflake(oldChannelId)) ?: return
-
         val channel = Main.bot.getChannelOf<TextChannel>(Snowflake(channelId)) ?: return
         val task = getTasks().find { it.id == taskId } ?: return
 
