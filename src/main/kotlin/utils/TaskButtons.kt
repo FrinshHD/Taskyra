@@ -14,7 +14,7 @@ import dev.kord.core.event.interaction.ComponentInteractionCreateEvent
 
 class StartTaskTaskButton : TaskButton(
     type = ButtonType.START_TASK,
-    label = "Start Task",
+    label = "Start",
     style = ButtonStyle.Primary
 ) {
     override suspend fun handle(task: Task, guildId: String) {
@@ -104,7 +104,7 @@ class SelectUsersTaskButton : TaskButton(
 
 class AssignMeTaskButton : TaskButton(
     type = ButtonType.ASSIGN_ME,
-    label = "Assign/Unassign to Me",
+    label = "Assign/Unassign Me",
     style = ButtonStyle.Secondary
 ) {
     override suspend fun handle(task: Task, event: ComponentInteractionCreateEvent) {

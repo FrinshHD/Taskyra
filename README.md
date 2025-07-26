@@ -1,21 +1,13 @@
-# Taskyra: Discord Task Management Bot
+# Taskyra
 
-Taskyra is a powerful, easy-to-deploy Discord bot for managing tasks within your server. Built with Kotlin,
-Taskyra helps teams organize, assign, and track tasks directly from Discord using slash commands and interactive
-buttons.
-
----
+Taskyra is an easy to use discord bot, which helps you manage tasks on your server. It helps you to organize tasks
+directly on you Discord server e.g. when you are working on a project discord releated.
 
 ## Features
 
-- **Task Management:** Create, assign, and update tasks with support for multiple states (Pending, In Progress,
-  Completed).
-- **Interactive Discord Commands:** Use slash commands to post tasks, configure channels, and update information.
-- **Action Buttons:** Start, complete, delete, assign users, or edit tasks with a single click on Discord messages.
-- **Channel Integration:** Automatically manages and summarizes tasks in designated Discord channels.
-- **Easy Deployment:** Containerized with Docker and Docker Compose for quick setup.
-
----
+- Create, assign and update tasks
+- Easily manage a task with buttons so you don't need to remember commands
+- Easily deploy your own instance with Docker and Docker Compose
 
 ## Getting Started
 
@@ -27,31 +19,32 @@ buttons.
 
 ### Installation
 
-1. **Clone the repository:**
-   ```sh
-   git clone https://github.com/FrinshHD/Taskyra.git
-   cd Taskyra
-   ```
-
-2. **Copy and configure environment variables:**
+1. Clone the repository:
+    ```sh
+    git clone https://github.com/FrinshHD/Taskyra.git
+    cd Taskyra
+    ```
+2. Copy and configure environment variables:
    ```sh
    cp .env.example .env
-   # Edit .env and set your DISCORD_TOKEN and any other required variables
    ```
-
-3. **Start Taskyra using Docker Compose:**
+3. Start Taskyra using Docker Compose:
    ```sh
    docker-compose up -d --build
    ```
-
-Taskyra will now be running in a container, using the configuration from your `.env` file.
-
----
 
 ## Usage
 
 ### Slash Commands
 
-- `/posttask` — Create and post a new task.
-- `/settaskchannels` — Configure which channels Taskyra uses.
-- `/updateinfo` — Update bot or task information.
+- `/posttask` - Create a new task.
+- `/settaskchannels` - Configure which channels Taskyra uses.
+
+### Buttons
+
+- `Start` - Put a task in the inprogress category.
+- `Complete` - Mark a task as completed.
+- `Delete` - Delete a task.
+- `Assign/Unassign Me` - Assign or unassign yourself to/from the task.
+- `Assign User` - Assign a user to the task using a modal.
+- `Edit Task` - Edit the task name and description using a modal.
