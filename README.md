@@ -55,3 +55,8 @@ You can use the official Taskyra bot without self-hosting. Simply invite it to y
 - `Assign/Unassign Me` - Assign or unassign yourself to/from the task.
 - `Assign User` - Assign a user to the task using a modal.
 - `Edit Task` - Edit the task name and description using a modal.
+
+### Showcase
+![img.png](docs/img.png)
+![img_2.png](docs/img_2.png)
+![img_1.png](docs/img_1.png)
