@@ -1,3 +1,5 @@
+![banner.png](docs/banner.png)
+
 # Taskyra
 
 Taskyra is an easy-to-use Discord bot that helps you manage tasks on your server. It allows you to organize tasks
@@ -57,6 +59,7 @@ You can use the official Taskyra bot without self-hosting. Simply invite it to y
 - `Edit Task` - Edit the task name and description using a modal.
 
 ### Showcase
+
 ![img.png](docs/img.png)
 ![img_2.png](docs/img_2.png)
 ![img_1.png](docs/img_1.png)
