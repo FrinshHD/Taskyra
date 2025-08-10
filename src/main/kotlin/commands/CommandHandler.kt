@@ -17,32 +17,57 @@ object CommandHandler {
             val reflections = Reflections("de.frinshy.commands", Scanners.TypesAnnotated)
             val commandClasses = reflections.getTypesAnnotatedWith(SlashCommand::class.java)
 
-            for (clazz in commandClasses) {
+            // Single scan: collect commands to register and prepare instances
+            val newCommands = mutableMapOf<String, Pair<Command, SlashCommand>>()
+
+            commandClasses.forEach { clazz ->
                 try {
                     if (!Command::class.java.isAssignableFrom(clazz)) {
-                        println("⚠️  Class ${clazz.simpleName} is annotated with @SlashCommand but doesn't implement Command interface")
-                        continue
+                        println("⚠️  ${clazz.simpleName} is annotated with @SlashCommand but doesn't implement Command")
+                        return@forEach
                     }
 
+                    @Suppress("UNCHECKED_CAST")
                     val kotlinClass = clazz.kotlin as KClass<out Command>
                     val annotation = clazz.getAnnotation(SlashCommand::class.java)
+                    val instance = kotlinClass.createInstance()
 
-                    val commandInstance = kotlinClass.createInstance()
-
-                    bot.createGlobalChatInputCommand(annotation.name, annotation.description) {
-                        commandInstance.defineOptions(this)
-                    }
-
-                    commands[annotation.name] = commandInstance
-
-                    println("✅ Auto-registered command: ${annotation.name} (${clazz.simpleName})")
+                    newCommands[annotation.name] = instance to annotation
 
                 } catch (e: Exception) {
-                    println("❌ Failed to register command ${clazz.simpleName}: ${e.message}")
+                    println("❌ Failed to prepare ${clazz.simpleName}: ${e.message}")
                 }
             }
 
-            println("🎉 Command auto-registration complete! Registered ${commands.size} commands.")
+            // Remove outdated Discord commands
+            println("🧹 Checking for outdated commands...")
+            bot.rest.interaction.getGlobalApplicationCommands(bot.selfId).toList().forEach { existingCommand ->
+                if (existingCommand.name !in newCommands) {
+                    bot.rest.interaction.deleteGlobalApplicationCommand(bot.selfId, existingCommand.id)
+                    println("🗑️ Removed outdated: ${existingCommand.name}")
+                } else {
+                    println("♻️ Updating: ${existingCommand.name}")
+                }
+            }
+
+            // Register all commands
+            newCommands.forEach { (name, commandData) ->
+                try {
+                    val (instance, annotation) = commandData
+
+                    bot.createGlobalChatInputCommand(annotation.name, annotation.description) {
+                        instance.defineOptions(this)
+                    }
+
+                    commands[name] = instance
+                    println("✅ Registered: $name")
+
+                } catch (e: Exception) {
+                    println("❌ Failed to register $name: ${e.message}")
+                }
+            }
+
+            println("🎉 Registration complete! Active commands: ${commands.size}")
 
         } catch (e: Exception) {
             println("❌ Error during command discovery: ${e.message}")
